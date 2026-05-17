@@ -15,8 +15,8 @@ return new class extends Migration
             $table->id();
             // Nama dokumen (sebagai kunci unik yang sama dengan 'name' di Editor.vue)
             $table->string('name')->unique();
-            // Data biner Yjs yang panjang (Uint8Array) disimpan sebagai mediumBlob atau longBlob
-            $table->binary('data')->nullable(); // Di MySQL, binary() menjadi BLOB. Cocok untuk data mentah Yjs.
+            // Data konten (Quill Delta atau HTML string)
+            $table->longText('content')->nullable();
             $table->timestamps();
         });
     }

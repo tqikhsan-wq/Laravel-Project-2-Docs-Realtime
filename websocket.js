@@ -14,28 +14,6 @@ const pool = mysql.createPool({
 const server = new Server({
   port: 1234,
 
-  // Menangkap pesan khusus dari Vue (seperti perintah "Simpan Versi")
-  onStateless: async ({ payload, documentName, document }) => {
-    try {
-      const msg = JSON.parse(payload)
-      if (msg.action === 'save-version') {
-        // Ambil snapshot/keadaan dokumen saat ini ke dalam bentuk biner Yjs
-        const state = Y.encodeStateAsUpdate(document)
-        const versionName = msg.versionName || 'Versi ' + new Date().toLocaleString('id-ID')
-        
-        await pool.execute(
-          `INSERT INTO document_versions (document_name, version_name, data, created_at, updated_at) 
-           VALUES (?, ?, ?, NOW(), NOW())`,
-          [documentName, versionName, state]
-        )
-        
-        console.log(`✅ Versi baru disimpan: ${versionName}`)
-      }
-    } catch (e) {
-      console.log('Error parsing stateless message:', e)
-    }
-  },
-
   extensions: [
     new Database({
       // 1. Fungsi mengambil data saat ada user yang baru bergabung/refresh halaman

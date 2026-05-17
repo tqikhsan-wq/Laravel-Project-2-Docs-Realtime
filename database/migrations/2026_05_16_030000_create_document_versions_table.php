@@ -17,8 +17,8 @@ return new class extends Migration
             $table->string('document_name');
             // Nama versi (misal: "Draft 1", "Revisi Final")
             $table->string('version_name');
-            // Data biner Yjs (snapshot pada saat versi ini dibuat)
-            $table->binary('data');
+            // Data konten (Quill Delta atau HTML string snapshot)
+            $table->longText('content');
             $table->timestamps();
         });
     }
