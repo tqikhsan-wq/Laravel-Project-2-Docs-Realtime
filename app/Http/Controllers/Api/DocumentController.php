@@ -24,8 +24,11 @@ class DocumentController extends Controller
 
     public function update(Request $request, $name)
     {
-        $document = Document::where('name', $name)->firstOrFail();
-        $document->update(['content' => $request->content]);
+        // Gunakan updateOrCreate agar tidak pernah 404 meski dokumen belum ada
+        $document = Document::updateOrCreate(
+            ['name' => $name],
+            ['content' => $request->content]
+        );
         return response()->json($document);
     }
 }

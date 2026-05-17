@@ -3,26 +3,23 @@
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
-        <title>Editor: {{ $name }} - Realtime Docs</title>
+        <title>{{ $name }} - Google Docs Clone</title>
+        <script>
+            window.onerror = function(msg, url, line) {
+                alert("CRITICAL ERROR: " + msg + " di baris " + line);
+            };
+        </script>
         @vite(['resources/css/app.css', 'resources/js/app.js'])
+        <link href="https://cdn.jsdelivr.net/npm/quill@2.0.2/dist/quill.snow.css" rel="stylesheet" />
+        <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Roboto', sans-serif; }
+            .font-google { font-family: 'Google Sans', sans-serif; }
+        </style>
     </head>
-    <body class="bg-gray-50 text-gray-900 min-h-screen">
-        <div id="app" class="max-w-6xl mx-auto p-4 sm:p-8">
-            <div class="mb-6 flex items-center justify-between">
-                <div class="flex items-center gap-4">
-                    <a href="/" class="text-gray-500 hover:text-gray-800 transition-colors" title="Kembali ke Dashboard">
-                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
-                    </a>
-                    <h1 class="text-2xl font-bold text-gray-800">Editor: <span class="text-blue-600">{{ $name }}</span></h1>
-                </div>
-                <div class="flex items-center gap-4">
-                    <div class="text-sm text-gray-600 hidden sm:block">
-                        Login sebagai: <span class="font-semibold text-gray-800">{{ auth()->user()->name }}</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- Mengirim nama dokumen, nama user, dan warna kursor sebagai prop ke Vue Component -->
+    <body class="bg-[#F8F9FA] text-gray-900 m-0 p-0" style="overflow: hidden;">
+        <div id="app" class="h-screen w-full">
+            <h1 id="loading-text" class="text-2xl text-gray-500 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">Memuat Editor... (Jika tulisan ini tidak hilang, ada error)</h1>
             <editor-component 
                 doc-name="{{ $name }}" 
                 user-name="{{ $user->name }}" 

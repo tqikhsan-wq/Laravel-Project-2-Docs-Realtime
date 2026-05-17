@@ -8,25 +8,37 @@ use Illuminate\Http\Request;
 
 class VersionController extends Controller
 {
-    public function index($document_name)
+    // GET /api/versions/{documentName}
+    public function index($documentName)
     {
-        $versions = DocumentVersion::where('document_name', $document_name)->get();
+        $versions = DocumentVersion::where('document_name', $documentName)
+            ->orderBy('created_at', 'desc')
+            ->get(['id', 'version_name', 'author_name', 'created_at']);
         return response()->json($versions);
     }
 
-    public function store(Request $request, $document_name)
+    // POST /api/versions/{documentName}
+    public function store(Request $request, $documentName)
     {
         $request->validate([
             'version_name' => 'required|string',
-            'content' => 'required|string' // Delta or HTML representation
+            'data'         => 'required|string',
         ]);
 
         $version = DocumentVersion::create([
-            'document_name' => $document_name,
-            'version_name' => $request->version_name,
-            'content' => $request->content
+            'document_name' => $documentName,
+            'version_name'  => $request->version_name,
+            'author_name'   => auth()->check() ? auth()->user()->name : 'Anonim',
+            'content'       => $request->data,  // field di DB = content
         ]);
 
         return response()->json($version, 201);
+    }
+
+    // GET /api/versions/data/{id}
+    public function showData($id)
+    {
+        $version = DocumentVersion::findOrFail($id);
+        return response()->json(['data' => $version->content]);
     }
 }

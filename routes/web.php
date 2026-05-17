@@ -26,8 +26,17 @@ Route::middleware('auth')->group(function () {
         $request->validate([
             'name' => 'required|string|regex:/^[a-zA-Z0-9-]+$/'
         ]);
+        
+        $docName = strtolower($request->name);
+        
+        // Simpan ke database agar langsung muncul di dashboard
+        DB::table('documents')->updateOrInsert(
+            ['name' => $docName],
+            ['content' => '', 'created_at' => now(), 'updated_at' => now()]
+        );
+
         // Redirect ke halaman editor dengan nama dokumen tersebut
-        return redirect('/doc/' . strtolower($request->name));
+        return redirect('/doc/' . $docName);
     });
 
     // Halaman Editor
@@ -42,44 +51,3 @@ Route::middleware('auth')->group(function () {
 
 });
 
-// API Routes untuk Versi Dokumen
-Route::get('/api/versions/{documentName}', function ($documentName) {
-    $versions = DB::table('document_versions')
-        ->where('document_name', $documentName)
-        ->orderBy('created_at', 'desc')
-        ->get(['id', 'version_name', 'author_name', 'created_at']);
-        
-    return response()->json($versions);
-});
-
-// Menyimpan versi baru dari Vue (HTML string)
-Route::post('/api/versions', function (Request $request) {
-    $request->validate([
-        'document_name' => 'required|string',
-        'version_name' => 'required|string',
-        'data' => 'required|string',
-    ]);
-
-    $authorName = auth()->check() ? auth()->user()->name : 'Anonim';
-
-    DB::table('document_versions')->insert([
-        'document_name' => $request->document_name,
-        'version_name' => $request->version_name,
-        'author_name' => $authorName,
-        'data' => $request->data,
-        'created_at' => now(),
-        'updated_at' => now(),
-    ]);
-
-    return response()->json(['success' => true]);
-});
-
-// Mengambil data spesifik (HTML string) untuk proses Restore
-Route::get('/api/versions/data/{id}', function ($id) {
-    $version = DB::table('document_versions')->where('id', $id)->first();
-    if (!$version) return response()->json(['error' => 'Not found'], 404);
-    
-    return response()->json([
-        'data' => $version->data // Akan otomatis dikonversi dari BLOB ke string HTML
-    ]);
-});

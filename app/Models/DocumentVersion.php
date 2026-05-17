@@ -12,6 +12,7 @@ class DocumentVersion extends Model
     protected $fillable = [
         'document_name',
         'version_name',
+        'author_name',
         'content'
     ];
 
