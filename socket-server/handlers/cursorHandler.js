@@ -1,31 +1,41 @@
 export default function setupCursorHandler(io, socket) {
-    // Track which document this socket is in
     let currentDocument = null;
 
-    // Listen for join-document to track room
     socket.on('join-document', (documentName) => {
         currentDocument = documentName;
     });
 
+    // ── Text cursor (Quill caret position) ──
     socket.on('cursor-move', (data) => {
         if (!data.documentName) return;
         currentDocument = data.documentName;
-
-        // Broadcast cursor position to OTHERS in same document room
         socket.to(data.documentName).emit('cursor-update', {
             socketId: socket.id,
             user: data.user,
-            range: data.range  // null = user left editor focus
+            range: data.range
         });
     });
 
-    // When user disconnects, remove their cursor from everyone else
+    // ── Mouse pointer position (seperti Figma) ──
+    socket.on('mouse-move', (data) => {
+        if (!data.documentName) return;
+        currentDocument = data.documentName;
+        socket.to(data.documentName).emit('mouse-update', {
+            socketId: socket.id,
+            user: data.user,
+            x: data.x,
+            y: data.y
+        });
+    });
+
+    // ── Saat disconnect, hapus cursor & mouse pointer dari semua user ──
     socket.on('disconnect', () => {
         if (currentDocument) {
             socket.to(currentDocument).emit('cursor-update', {
-                socketId: socket.id,
-                user: null,
-                range: null  // null range = remove cursor
+                socketId: socket.id, user: null, range: null
+            });
+            socket.to(currentDocument).emit('mouse-update', {
+                socketId: socket.id, user: null, x: null, y: null
             });
         }
     });

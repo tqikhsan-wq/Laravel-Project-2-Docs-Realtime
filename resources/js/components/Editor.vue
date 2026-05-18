@@ -30,15 +30,32 @@
           <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
         </button>
         <button @click="saveVersion" class="save-btn">💾 Simpan Versi</button>
+        <button @click="downloadDoc" class="download-btn" title="Download dokumen">⬇ Download</button>
         <img :src="`https://ui-avatars.com/api/?name=${encodeURIComponent(userName)}&background=random`"
           class="uavatar" :title="userName" />
       </div>
     </header>
 
-    <!-- ===== QUILL WRAPPER (toolbar auto-created di sini oleh Quill) ===== -->
-    <div id="quill-wrap">
-      <!-- Quill Snow akan membuat .ql-toolbar di sini, lalu .ql-container -->
+    <!-- ===== QUILL WRAPPER ===== -->
+    <div id="quill-wrap" @mousemove="onMouseMove" @mouseleave="onMouseLeave">
       <div id="quill-mount"></div>
+
+      <!-- ===== MOUSE CURSORS FIGMA-STYLE ===== -->
+      <div
+        v-for="(cur, sid) in otherMouseCursors" :key="sid"
+        class="remote-mouse"
+        :style="{ left: cur.x + 'px', top: cur.y + 'px', '--cur-color': cur.color }"
+      >
+        <!-- Arrow SVG -->
+        <svg width="18" height="22" viewBox="0 0 18 22" fill="none">
+          <path d="M0 0L0 18L4.5 13.5L7.5 20L9.5 19L6.5 12H12L0 0Z"
+            :fill="cur.color" stroke="white" stroke-width="1.2"/>
+        </svg>
+        <!-- Nama user -->
+        <span class="remote-mouse-label" :style="{ background: cur.color }">
+          {{ cur.name }}
+        </span>
+      </div>
     </div>
 
     <!-- ===== VERSION HISTORY ===== -->
@@ -94,9 +111,48 @@ const versions    = ref([])
 const showHistory = ref(false)
 const activeUsers = ref({})
 const connected   = ref(false)
+const otherMouseCursors = ref({})  // { socketId: { x, y, name, color } }
+
+// Throttle mouse events — kirim max 30x/detik
+let lastMouseEmit = 0
 
 // ---- helpers ----
 const fmtDate = (d) => new Date(d).toLocaleString('id-ID', { day:'numeric', month:'short', hour:'2-digit', minute:'2-digit' })
+
+// ---- download dokumen sebagai .doc (client-side export) ----
+const downloadDoc = () => {
+  if (!quill) return
+  const fileName = props.docName + '.doc'
+  const content  = quill.root.innerHTML
+
+  // Wrap dalam format HTML yang bisa dibaca Microsoft Word
+  const wordContent = `
+<html xmlns:o='urn:schemas-microsoft-com:office:office'
+      xmlns:w='urn:schemas-microsoft-com:office:word'
+      xmlns='http://www.w3.org/TR/REC-html40'>
+<head>
+  <meta charset='UTF-8'>
+  <title>${props.docName}</title>
+  <!--[if gte mso 9]>
+  <xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml>
+  <![endif]-->
+  <style>
+    body  { font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.6; margin: 2cm; }
+    h1,h2,h3 { margin-top: 1em; }
+    p { margin: 0.4em 0; }
+  </style>
+</head>
+<body>
+  ${content}
+</body>
+</html>`
+
+  const blob = new Blob([wordContent], { type: 'application/msword;charset=utf-8' })
+  const url  = URL.createObjectURL(blob)
+  const a    = document.createElement('a')
+  a.href = url; a.download = fileName; a.click()
+  URL.revokeObjectURL(url)
+}
 
 // ---- versions ----
 const fetchVersions = async () => {
@@ -125,6 +181,34 @@ const scheduleSave = () => {
   saveTimer = setTimeout(() => {
     if (quill && socket) socket.emit('save-document', { documentName: props.docName, content: JSON.stringify(quill.getContents()) })
   }, 800)
+}
+
+// ---- MOUSE CURSOR TRACKING (Figma-style) ----
+const onMouseMove = (e) => {
+  if (!socket?.connected) return
+  const now = Date.now()
+  if (now - lastMouseEmit < 33) return  // max ~30fps
+  lastMouseEmit = now
+
+  const wrap = document.getElementById('quill-wrap')
+  if (!wrap) return
+  const rect = wrap.getBoundingClientRect()
+
+  socket.emit('mouse-move', {
+    documentName: props.docName,
+    user: { name: props.userName, color: props.userColor },
+    x: e.clientX - rect.left,
+    y: e.clientY - rect.top
+  })
+}
+
+const onMouseLeave = () => {
+  if (!socket?.connected) return
+  // Beritahu user lain bahwa kita keluar dari area
+  socket.emit('mouse-move', {
+    documentName: props.docName,
+    user: null, x: null, y: null
+  })
 }
 
 // ---- INIT ----
@@ -202,7 +286,7 @@ onMounted(() => {
     })
   })
 
-  // Tampilkan kursor user lain
+  // Tampilkan kursor user lain (text cursor Quill)
   socket.on('cursor-update', ({ socketId, user, range }) => {
     if (!cursors || socketId === myId) return
     if (range && user) {
@@ -212,6 +296,16 @@ onMounted(() => {
     } else {
       delete activeUsers.value[socketId]
       try { cursors.removeCursor(socketId) } catch {}
+    }
+  })
+
+  // Tampilkan mouse pointer user lain (Figma-style)
+  socket.on('mouse-update', ({ socketId, user, x, y }) => {
+    if (socketId === myId) return
+    if (user && x !== null && y !== null) {
+      otherMouseCursors.value[socketId] = { x, y, name: user.name, color: user.color }
+    } else {
+      delete otherMouseCursors.value[socketId]
     }
   })
 
@@ -232,6 +326,42 @@ onBeforeUnmount(() => {
 /* ================================================================
    EDITOR — CSS berbasis ID, tidak konflik dengan Tailwind
    ================================================================ */
+
+/* ===== FIGMA-STYLE MOUSE CURSOR ===== */
+#quill-wrap {
+  position: relative;  /* penting: agar cursor absolute-positioned benar */
+}
+
+.remote-mouse {
+  position: absolute;
+  pointer-events: none;     /* tidak menghalangi klik/typing */
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  transform: translate(0, 0);
+  transition: left 0.08s linear, top 0.08s linear;  /* smooth movement */
+  will-change: left, top;
+}
+
+.remote-mouse svg {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0,0,0,0.3));
+}
+
+.remote-mouse-label {
+  display: inline-block;
+  color: white;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: 'Roboto', Arial, sans-serif;
+  padding: 2px 8px;
+  border-radius: 0 4px 4px 4px;
+  margin-top: -2px;
+  margin-left: 14px;
+  white-space: nowrap;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.25);
+}
 
 /* ===== quill-cursors v4 CSS (manual, tanpa attr() yang tidak valid) ===== */
 .ql-cursor .ql-cursor-caret-container,
@@ -319,6 +449,12 @@ html, body { margin: 0; padding: 0; height: 100%; }
   font-weight: 500; cursor: pointer; white-space: nowrap;
 }
 .save-btn:hover { background: #a8d4ee; }
+.download-btn {
+  background: #e6f4ea; color: #1e8e3e; border: none;
+  padding: 7px 16px; border-radius: 20px; font-size: 13px;
+  font-weight: 500; cursor: pointer; white-space: nowrap;
+}
+.download-btn:hover { background: #ceead6; }
 .uavatar { width: 32px; height: 32px; border-radius: 50%; cursor: pointer; }
 
 /* ================================================================
